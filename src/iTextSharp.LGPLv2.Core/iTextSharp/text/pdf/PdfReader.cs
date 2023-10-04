@@ -4427,7 +4427,7 @@ public class PdfReader : IPdfViewerPreferences, IDisposable
                             decrypt.SetupByOwnerPassword(documentId, p, uValue, oValue, pValue);
                             if (equalsArray(uValue, decrypt.UserKey, rValue == 3 || rValue == 4 ? 16 : 32)) return BadPasswordException.PasswordTestResult.SuccessOwnerPassword;
                             decrypt.SetupByUserPassword(documentId, p, oValue, pValue);
-                            if (equalsArray(uValue, decrypt.UserKey, rValue == 3 || rValue == 4 ? 16 : 32)) return BadPasswordException.PasswordTestResult.SuccessOwnerPassword;
+                            if (equalsArray(uValue, decrypt.UserKey, rValue == 3 || rValue == 4 ? 16 : 32)) return BadPasswordException.PasswordTestResult.SuccessUserPassword;
                             return BadPasswordException.PasswordTestResult.Fail;
                         });
                     }
