@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.util;
@@ -4423,8 +4423,6 @@ public class PdfReader : IPdfViewerPreferences, IDisposable
                         throw new BadPasswordException("Bad user password", p =>
                         {
                             var decrypt = new PdfEncryption();
-                            decrypt.SetCryptoMode(cryptoMode, lengthValue);
-                            decrypt = new PdfEncryption();
                             decrypt.SetCryptoMode(cryptoMode, lengthValue);
                             decrypt.SetupByOwnerPassword(documentId, p, uValue, oValue, pValue);
                             if (equalsArray(uValue, decrypt.UserKey, rValue == 3 || rValue == 4 ? 16 : 32)) return BadPasswordException.PasswordTestResult.SuccessOwnerPassword;
