@@ -3742,7 +3742,7 @@ public class PdfReader : IPdfViewerPreferences, IDisposable
         }
 
         //before we go on, let's make sure we haven't done this a number of times that indicates a problematic recursion loop
-        if ((new StackTrace().GetFrames() ?? Array.Empty<StackFrame>()).Count(frame => frame.GetMethod().Name ==
+        if ((new StackTrace().GetFrames() ?? Array.Empty<StackFrame>()).Count(frame => frame?.GetMethod()?.Name ==
                                                                                   nameof(ReadXRefStream)) > 200)
         {
             _bBailout = true;
