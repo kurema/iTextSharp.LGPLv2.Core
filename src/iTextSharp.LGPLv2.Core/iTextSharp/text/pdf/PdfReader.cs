@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.util;
@@ -3320,7 +3320,11 @@ public class PdfReader : IPdfViewerPreferences, IDisposable
             }
             catch (Exception ne)
             {
-                if (ne is BadPasswordException)
+				if (ne is BadPasswordExceptionTriable neb)
+				{
+					throw new BadPasswordExceptionTriable(neb.Message, neb.InnerException, neb.Tester);
+				}
+				if (ne is BadPasswordException)
                 {
                     throw new BadPasswordException(ne.Message);
                 }
@@ -3984,7 +3988,7 @@ public class PdfReader : IPdfViewerPreferences, IDisposable
         }
 
         //before we go on, let's make sure we haven't done this a number of times that indicates a problematic recursion loop
-        if ((new StackTrace().GetFrames() ?? Array.Empty<StackFrame>()).Count(frame => frame.GetMethod().Name ==
+        if ((new StackTrace().GetFrames() ?? Array.Empty<StackFrame>()).Count(frame => frame?.GetMethod()?.Name ==
                 nameof(ReadXRefStream)) > 200)
         {
             _bBailout = true;
@@ -4729,8 +4733,19 @@ public class PdfReader : IPdfViewerPreferences, IDisposable
 
                     if (!equalsArray(uValue, decrypt.UserKey, RValue == 3 || RValue == 4 ? 16 : 32))
                     {
-                        throw new BadPasswordException("Bad user password");
-                    }
+						int pValue = PValue;
+						int rValue = RValue;
+						throw new BadPasswordExceptionTriable("Bad user password", p =>
+						{
+							var decrypt = new PdfEncryption();
+							decrypt.SetCryptoMode(cryptoMode, lengthValue);
+							decrypt.SetupByOwnerPassword(documentId, p, uValue, oValue, pValue);
+							if (equalsArray(uValue, decrypt.UserKey, rValue == 3 || rValue == 4 ? 16 : 32)) return BadPasswordExceptionTriable.TryPasswordResult.SuccessOwnerPassword;
+							decrypt.SetupByUserPassword(documentId, p, oValue, pValue);
+							if (equalsArray(uValue, decrypt.UserKey, rValue == 3 || rValue == 4 ? 16 : 32)) return BadPasswordExceptionTriable.TryPasswordResult.SuccessUserPassword;
+							return BadPasswordExceptionTriable.TryPasswordResult.Fail;
+						});
+					}
                 }
                 else
                 {
@@ -4788,23 +4803,55 @@ public class PdfReader : IPdfViewerPreferences, IDisposable
 
                 if (!_ownerPasswordUsed)
                 {
-                    // analog of step c of Algorithm 2.A for user password
-                    hashAlg2B = PdfEncryption.HashAlg2B(password, uValue.CopyOfRange(32, 40), null);
+					int pValue = this.PValue;
+					Func<byte[], BadPasswordExceptionTriable.TryPasswordResult> passwordTester = p =>
+					{
+						var decrypt = new PdfEncryption();
+						decrypt.SetCryptoMode(cryptoMode, lengthValue);
+						var password = p;
+						if (password == null)
+						{
+							password = Array.Empty<byte>();
+						}
+						else if (password.Length > 127)
+						{
+							password = password.CopyOf(127);
+						}
+						var hashAlg2B = PdfEncryption.HashAlg2B(password, oValue.CopyOfRange(32, 40), uValue);
+						if (equalsArray(hashAlg2B, oValue, 32))
+						{
+							// step d of Algorithm 2.A
+							decrypt.SetupByOwnerPassword(documentId, password, uValue, ueValue, oValue, oeValue, pValue);
+							// step f of Algorithm 2.A
+							if (decrypt.DecryptAndCheckPerms(permsValue))
+							{
+								return BadPasswordExceptionTriable.TryPasswordResult.SuccessOwnerPassword;
+							}
+						}
+						hashAlg2B = PdfEncryption.HashAlg2B(password, uValue.CopyOfRange(32, 40), null);
+						if (!equalsArray(hashAlg2B, uValue, 32)) return BadPasswordExceptionTriable.TryPasswordResult.Fail;
+						decrypt.SetupByUserPassword(documentId, password, uValue, ueValue, oValue, oeValue, pValue);
+						if (!decrypt.DecryptAndCheckPerms(permsValue)) return BadPasswordExceptionTriable.TryPasswordResult.Fail;
+						return BadPasswordExceptionTriable.TryPasswordResult.SuccessUserPassword;
+					};
+
+					// analog of step c of Algorithm 2.A for user password
+					hashAlg2B = PdfEncryption.HashAlg2B(password, uValue.CopyOfRange(32, 40), null);
 
                     if (!equalsArray(hashAlg2B, uValue, 32))
                     {
-                        throw new BadPasswordException("Bad user password");
-                    }
+						throw new BadPasswordExceptionTriable("Bad user password", passwordTester);
+					}
 
-                    // step e of Algorithm 2.A
-                    decrypt.SetupByUserPassword(documentId, password, uValue, ueValue, oValue, oeValue, PValue);
+					// step e of Algorithm 2.A
+					decrypt.SetupByUserPassword(documentId, password, uValue, ueValue, oValue, oeValue, PValue);
 
                     // step f of Algorithm 2.A
                     if (!decrypt.DecryptAndCheckPerms(permsValue))
                     {
-                        throw new BadPasswordException("Bad user password");
-                    }
-                }
+						throw new BadPasswordExceptionTriable("Bad user password", passwordTester);
+					}
+				}
 
                 PValue = decrypt.Permissions;
             }
